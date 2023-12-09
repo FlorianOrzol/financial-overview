@@ -1,0 +1,65 @@
+#!/bin/bash
+# -----------------------------------------------------------
+# Filename: calc.sh
+# Author: Florian Orzol
+# Date: 01.12.2023
+# Description: this script creates an overview for each directory(month, year) depends on categories and calculte the amounts.
+# Version: 0.1
+# Revision Date: DD-MM-YYYY
+# Revision Description: Description of changes in this revision.
+# Dependencies: -
+# -----------------------------------------------------------
+#
+
+source ./parameters.sh
+regex_file="regex"
+
+# find all $FILE_OTHERS in all directories
+find . -type f -name $FILE_OTHERS | while read -r fileOthers
+do
+    echo "calculating...$(dirname "$fileOthers")"
+
+    # remove previous calculations
+    if [ -f "$(dirname "$fileOthers")/__" ]; then
+      rm "$(dirname "$fileOthers")/__"
+    fi
+
+    touch "$(dirname "$fileOthers")/__"
+
+    # add up all amounts
+    all_amounts=0
+
+    # each row set category;search_term1;search_term2
+    while IFS=';' read -r category search_term1 search_term2
+    do
+      
+        # calculate every category-file
+        sum=$(awk -F';' '{gsub(/,/, ".", $'$NEW_COLUMN_AMOUNT'); gsub(/"/, "", $'$NEW_COLUMN_AMOUNT'); sum += $'$NEW_COLUMN_AMOUNT'} END {print sum}' "$(dirname "$fileOthers")/$category.csv")
+
+        # set 0 when no entry of category exists
+        if [[ $sum == '' ]]; then
+          sum=0
+        fi
+
+        # calculate all amounts
+        all_amounts=$(echo "$all_amounts + $sum" | bc)
+
+        # write calculation in __
+        echo "$category: $sum €" >> "$(dirname "$fileOthers")/__"
+    done < $regex_file
+
+    # calculate the rest ammounts
+    sum_others=$(awk -F';' '{gsub(/,/, ".", $'$NEW_COLUMN_AMOUNT'); gsub(/"/, "", $'$NEW_COLUMN_AMOUNT'); sum += $'$NEW_COLUMN_AMOUNT'} END {print sum}' "$fileOthers")
+
+    # add rest ammounts to all amounts
+    all_amounts=$(echo "$all_amounts + $sum_others" | bc)
+
+    # write rest ammounts in __ file
+    echo "others: $sum_others €" >> "$(dirname "$fileOthers")/__"
+
+    # write all amounts in __ file
+    echo "all_amounts: $all_amounts €" >> "$(dirname "$fileOthers")/__"
+done
+
+# remove comments as files
+find . -type f -name '===*' -exec rm {} \;

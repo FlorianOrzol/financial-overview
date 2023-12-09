@@ -1,0 +1,59 @@
+#!/bin/bash
+# -----------------------------------------------------------
+# Filename: sort.sh
+# Author: Florian Orzol
+# Date: 01.12.2023
+# Description: this script sort each directory(month, year) by their categories in regex file.
+# Version: 0.1
+# Revision Date: DD-MM-YYYY
+# Revision Description: Description of changes in this revision.
+# Dependencies: -
+# -----------------------------------------------------------
+#
+# Please set the settings in your regex file
+# the format is category;search_term1;search_term2
+# >> category: chose your own category e.g. wage, insurance ...
+# >> search_term1: is searching in $NEW_COLUMN_PAYMENT_REFERENCE
+# >> search_term2: is searching in $NEW_COLUMN_PAYMEE
+
+source ./parameters.sh
+
+regex_file="regex"
+
+# find all $FILE_OTHERS in all directories
+find . -type f -name $FILE_OTHERS | while read -r fileOthers
+do
+  echo "sort...$(dirname "$fileOthers")"
+    # each row set category;search_term1;search_term2
+    while IFS=';' read -r category search_term1 search_term2
+    do
+        # create categories as files.csv
+        touch "$(dirname "$fileOthers")/$category.csv"
+        
+        # search for every $FILE_OTHERS
+        grep -n '' $fileOthers | while read -r line
+        # each row in every created $FILE_OTHERS
+        do
+            if [[ $line == ===* ]]; then
+              continue
+            fi
+
+            # extract the string from the reference and payee columns
+            value1=$(echo $line | cut -d';' -f$NEW_COLUMN_PAYMENT_REFERENCE | tr -d '"')
+            value2=$(echo $line | cut -d';' -f$NEW_COLUMN_PAYEE | tr -d '"')
+            
+           # search for each regex terms and save in the specific category 
+            if echo "$value1" | grep -E "$search_term1" > /dev/null 2>&1 || echo "$value2" | grep -E "$search_term2" > /dev/null 2>&1; then
+              
+                # move the row to category.csv if the row does not already exist
+                if ! grep -Fxq "$line" "$(dirname "$fileOthers")/$category.csv" 2>/dev/null; then
+                    echo $line >> "$(dirname "$fileOthers")/$category.csv"
+                fi
+                
+              # delete the line in $FILE_OTHERS
+              sed -i "\|${line}|d" $fileOthers
+            fi
+        done < $fileOthers
+    done < $regex_file
+done
+

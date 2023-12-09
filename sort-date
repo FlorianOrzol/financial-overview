@@ -1,0 +1,93 @@
+#!/bin/bash
+# -----------------------------------------------------------
+# Filename: finanz.sh
+# Author: Florian Orzol
+# Date: 01.12.2023
+# Description: this script create directories for each years and month.
+#   The lines will be sorted on their date column
+# Version: 0.1
+# Revision Date: DD-MM-YYYY
+# Revision Description: Description of changes in this revision.
+# Dependencies: -
+# -----------------------------------------------------------
+#
+#
+# Enter the CSV file to be imported as the first parameter.
+# use the format "";"";""
+# But first please fill up parameters.sh with your CSV-file parameters
+
+importCSVfile=$1
+
+source ./parameters.sh
+
+relevantColumns=$(IFS=','; echo "${COLUMNS[*]}")
+
+# set a counter for the row number
+row_number=0
+
+# Save the header row
+headings=$(head -n 1 $importCSVfile)
+
+# Initialize the previous year-month combination
+prev_year_month=""
+
+# importCSVfile row for row
+while IFS=';' read -r row
+do
+    # ignore header row
+    if [ $row_number -eq 0 ]; then
+        row_number=$((row_number+1))
+        continue
+    fi
+
+    # extract the date column and remove ""
+    date=$(echo $row | cut -d';' -f$COLUMN_DATE | tr -d '"')
+    marked=$(echo $row | cut -d';' -f$COLUMN_PENDING | tr -d '"')
+    if [[ $marked == $PENDING_STRING ]]; then
+      continue
+    fi
+
+    # set day, month and year from date
+    day=$(echo $date | cut -d$DATE_FORMAT_DELIMITER -f$DATE_ORDER_DAY)
+    month=$(echo $date | cut -d$DATE_FORMAT_DELIMITER -f$DATE_ORDER_MONTH)
+    year=$(echo $date | cut -d$DATE_FORMAT_DELIMITER -f$DATE_ORDER_YEAR)
+    # echo "nach Fehler"
+    
+    # set the year-format to yyyy if is yy
+    if [[ year -le 100 ]]; then
+      year="20$year"
+    fi
+    
+    # create directories for years and months
+    mkdir -p "$year/$month"
+    mkdir -p "$year"
+    
+    # print output of progress for each year and month
+    if [ "$prev_year_month" != "$year-$month" ]; then
+        echo "set billings in $year-$month..."
+        prev_year_month="$year-$month"
+        
+        # print header
+        echo $headings | cut -d';' -f"$relevantColumns" > "$year/$month/backup_all_data.csv"
+    fi
+    
+    row_relevant=$(echo $row | cut -d';' -f"$relevantColumns")
+    # write row in each year and month, if not exists in backup_all_data
+    if ! grep -Fxq "$row_relevant" "$year/$month/backup_all_data.csv" 2>/dev/null; then
+        echo $row_relevant >> "$year/$month/backup_all_data.csv"
+    fi
+    if [ ! -f "$year/backup_all_data.csv" ]; then
+        echo $headings | cut -d';' -f"$relevantColumns" > "$year/backup_all_data.csv"
+    fi
+    if ! grep -Fxq "$row_relevant" "$year/backup_all_data.csv" 2>/dev/null; then
+        echo $row_relevant >> "$year/backup_all_data.csv"
+    fi
+
+    # rise row number, only for header row
+    row_number=$((row_number+1))
+done < $importCSVfile
+
+# copy 'backup_all_data' in FILE_OTHERS
+find . -type f -name "backup_all_data.csv" -exec sh -c 'cp "$1" "${1%backup_all_data.csv}"'"$FILE_OTHERS" _ {} \;
+
+
